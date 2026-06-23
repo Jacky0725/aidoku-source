@@ -7,7 +7,13 @@ Custom Aidoku 0.7+ sources for:
 
 ## Usage
 
-After this repository is published with GitHub Pages enabled, add this source list in Aidoku:
+Add this verified source list URL in Aidoku:
+
+```text
+https://raw.githubusercontent.com/Jacky0725/aidoku-source/gh-pages/index.min.json
+```
+
+If GitHub Pages is enabled for the `gh-pages` branch, this shorter URL can also be used after it becomes available:
 
 ```text
 https://jacky0725.github.io/aidoku-source/index.min.json
