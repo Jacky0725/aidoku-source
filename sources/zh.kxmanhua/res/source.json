@@ -2,7 +2,7 @@
 	"info": {
 		"id": "zh.kxmanhua",
 		"name": "开心看漫画",
-		"version": 1,
+		"version": 2,
 		"url": "https://kxmanhua.com",
 		"contentRating": 2,
 		"languages": ["zh"]
@@ -13,4 +13,3 @@
 		{ "id": "popular", "name": "最热门" }
 	]
 }
-
