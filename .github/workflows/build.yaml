@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -54,6 +58,14 @@ jobs:
       - name: Build source list
         run: aidoku build sources/*/package.aix --name "Jacky Aidoku Sources"
 
+      - name: Upload source list artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aidoku-source-list
+          path: public
+          if-no-files-found: ignore
+
       - name: Deploy GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4.7.2
         with:
@@ -61,4 +73,3 @@ jobs:
           folder: public
           single-commit: true
           commit-message: Update Aidoku source list
-
