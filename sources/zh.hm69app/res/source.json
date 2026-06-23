@@ -1,0 +1,14 @@
+{
+	"info": {
+		"id": "zh.hm69app",
+		"name": "69漫画",
+		"version": 1,
+		"url": "https://hm.69app.org",
+		"contentRating": 2,
+		"languages": ["zh"]
+	},
+	"listings": [
+		{ "id": "latest", "name": "最新更新" },
+		{ "id": "popular", "name": "最热" }
+	]
+}

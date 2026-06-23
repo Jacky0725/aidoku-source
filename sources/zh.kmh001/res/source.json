@@ -1,0 +1,13 @@
+{
+	"info": {
+		"id": "zh.kmh001",
+		"name": "K漫画",
+		"version": 1,
+		"url": "https://kmh001.com/home",
+		"contentRating": 2,
+		"languages": ["zh"]
+	},
+	"listings": [
+		{ "id": "latest", "name": "首页" }
+	]
+}

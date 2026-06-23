@@ -1,0 +1,14 @@
+{
+	"info": {
+		"id": "zh.55comics",
+		"name": "55Comics",
+		"version": 1,
+		"url": "https://www.55comics.com",
+		"contentRating": 2,
+		"languages": ["zh"]
+	},
+	"listings": [
+		{ "id": "latest", "name": "最新更新" },
+		{ "id": "popular", "name": "热门排行" }
+	]
+}
