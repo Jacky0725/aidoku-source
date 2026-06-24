@@ -1,8 +1,9 @@
 #![no_std]
 
 use aidoku::{
-	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Listing, ListingProvider,
-	Manga, MangaPageResult, MangaStatus, Page, PageContent, Result, Source, UpdateStrategy, Viewer,
+	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, ImageRequestProvider,
+	Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page, PageContent, PageContext,
+	Result, Source, UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString},
 	imports::{html::Element, net::Request},
 	prelude::*,
@@ -42,11 +43,16 @@ impl Source for Kmh001 {
 		let body = Request::get(&manga_url)?.string()?;
 
 		if needs_details {
-			if let Some(title) = between_after(&body, "\"text-xl font-bold\",\"children\":\"", "\"") {
+			if let Some(title) = between_after(&body, "\"text-xl font-bold\",\"children\":\"", "\"")
+			{
 				manga.title = unescape_json(title);
 			}
-			manga.cover = first_url_after(&body, "\"src\":\"https://img.kmh.pics/");
-			manga.description = between_after(&body, "\"whitespace-normal\",\"children\":\"", "\"").map(unescape_json);
+			manga.cover = meta_content(&body, "og:image")
+				.or_else(|| meta_content(&body, "twitter:image"))
+				.or_else(|| first_image_url(&body))
+				.or(manga.cover);
+			manga.description = between_after(&body, "\"whitespace-normal\",\"children\":\"", "\"")
+				.map(unescape_json);
 			manga.status = MangaStatus::Unknown;
 			manga.content_rating = ContentRating::NSFW;
 			manga.update_strategy = UpdateStrategy::Always;
@@ -67,7 +73,11 @@ impl Source for Kmh001 {
 		let mut pages = Vec::new();
 		let mut pos = start;
 		while let Some(url) = next_json_url(&body, &mut pos) {
-			if url.ends_with(".jpg") || url.ends_with(".jpeg") || url.ends_with(".png") || url.ends_with(".webp") {
+			if url.ends_with(".jpg")
+				|| url.ends_with(".jpeg")
+				|| url.ends_with(".png")
+				|| url.ends_with(".webp")
+			{
 				pages.push(Page {
 					content: PageContent::Url(url, None),
 					..Default::default()
@@ -124,12 +134,15 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 					return None;
 				}
 				keys.push(key.clone());
+				let cover = a
+					.select_first("img")
+					.and_then(|img| attr_url(&img, "src").or_else(|| attr_url(&img, "data-src")))
+					.filter(|url| !is_placeholder_image(url))
+					.or_else(|| detail_cover_for_key(&key));
 				Some(Manga {
 					key,
 					title,
-					cover: a
-						.select_first("img")
-						.and_then(|img| attr_url(&img, "src").or_else(|| attr_url(&img, "data-src"))),
+					cover,
 					content_rating: ContentRating::NSFW,
 					viewer: Viewer::Webtoon,
 					url: Some(absolute_url(&href)),
@@ -158,11 +171,14 @@ fn parse_chapters(body: &str) -> Vec<Chapter> {
 		if id.len() != 24 {
 			continue;
 		}
-		let window_end = core::cmp::min(body.len(), pos + 900);
-		let window = &body[pos..window_end];
-		if !window.contains("\"covers\"") {
+		if chapters
+			.iter()
+			.any(|chapter: &Chapter| chapter.key == format!("/chapter/{id}"))
+		{
 			continue;
 		}
+		let window_end = core::cmp::min(body.len(), pos + 700);
+		let window = &body[pos..window_end];
 		let subtitle = between_after(window, "\"subtitle\":\"", "\"").map(unescape_json);
 		let title = between_after(window, "\"title\":\"", "\"").map(unescape_json);
 		let chapter_title = match (subtitle, title) {
@@ -196,10 +212,42 @@ fn next_json_url(body: &str, pos: &mut usize) -> Option<String> {
 	Some(value)
 }
 
-fn first_url_after(body: &str, marker: &str) -> Option<String> {
-	let start = body.find(marker)? + "\"src\":\"".len();
-	let end = body[start..].find('"')?;
-	Some(unescape_json(&body[start..start + end]))
+fn detail_cover_for_key(key: &str) -> Option<String> {
+	let body = Request::get(absolute_url(key)).ok()?.string().ok()?;
+	meta_content(&body, "og:image")
+		.or_else(|| meta_content(&body, "twitter:image"))
+		.or_else(|| first_image_url(&body))
+}
+
+fn meta_content(body: &str, property: &str) -> Option<String> {
+	let marker = format!("{}\" content=\"", property);
+	between_after(body, &marker, "\"").map(unescape_json)
+}
+
+fn first_image_url(body: &str) -> Option<String> {
+	let mut pos = 0;
+	while let Some(url) = next_json_url(body, &mut pos) {
+		if is_image_url(&url) && !is_placeholder_image(&url) {
+			return Some(url);
+		}
+	}
+	None
+}
+
+fn is_image_url(url: &str) -> bool {
+	let lower = url.to_ascii_lowercase();
+	lower.ends_with(".jpg")
+		|| lower.ends_with(".jpeg")
+		|| lower.ends_with(".png")
+		|| lower.ends_with(".webp")
+		|| lower.contains(".jpg?")
+		|| lower.contains(".jpeg?")
+		|| lower.contains(".png?")
+		|| lower.contains(".webp?")
+}
+
+fn is_placeholder_image(url: &str) -> bool {
+	url.contains("/images/loading") || url.contains("favicon") || url.contains("/images/ad/")
 }
 
 fn between_after<'a>(body: &'a str, start: &str, end: &str) -> Option<&'a str> {
@@ -271,4 +319,17 @@ fn hex(value: u8) -> char {
 	}
 }
 
-register_source!(Kmh001, ListingProvider, DeepLinkHandler);
+impl ImageRequestProvider for Kmh001 {
+	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
+		Ok(Request::get(url)?
+			.header("User-Agent", "Mozilla/5.0")
+			.header("Referer", BASE_URL))
+	}
+}
+
+register_source!(
+	Kmh001,
+	ListingProvider,
+	DeepLinkHandler,
+	ImageRequestProvider
+);

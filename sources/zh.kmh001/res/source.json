@@ -2,8 +2,9 @@
 	"info": {
 		"id": "zh.kmh001",
 		"name": "K漫画",
-		"version": 1,
+		"version": 2,
 		"url": "https://kmh001.com/home",
+		"minAppVersion": "0.8.3",
 		"contentRating": 2,
 		"languages": ["zh"]
 	},

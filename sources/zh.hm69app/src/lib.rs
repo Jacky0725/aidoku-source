@@ -1,8 +1,9 @@
 #![no_std]
 
 use aidoku::{
-	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Listing, ListingProvider,
-	Manga, MangaPageResult, MangaStatus, Page, PageContent, Result, Source, UpdateStrategy, Viewer,
+	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, ImageRequestProvider,
+	Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page, PageContent, PageContext,
+	Result, Source, UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString},
 	imports::{html::Element, net::Request},
 	prelude::*,
@@ -25,7 +26,10 @@ impl Source for Hm69App {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
-				format!("{BASE_URL}/index.php/search?key={}", encode_query(query.trim()))
+				format!(
+					"{BASE_URL}/index.php/search?key={}",
+					encode_query(query.trim())
+				)
 			}
 			_ => listing_url("latest", page),
 		};
@@ -52,7 +56,9 @@ impl Source for Hm69App {
 				.and_then(|el| attr_url(&el, "content"))
 				.or_else(|| {
 					html.select_first(".de-info__cover img, img[data-original]")
-						.and_then(|img| attr_url(&img, "data-original").or_else(|| attr_url(&img, "src")))
+						.and_then(|img| {
+							attr_url(&img, "data-original").or_else(|| attr_url(&img, "src"))
+						})
 				});
 			manga.description = html
 				.select_first(".comic-intro, .intro-total")
@@ -66,25 +72,29 @@ impl Source for Hm69App {
 		}
 
 		if needs_chapters {
-			manga.chapters = html.select("a.j-chapter-link[href^='/index.php/chapter/'], a[href^='/index.php/chapter/']").map(|els| {
-				let mut keys = Vec::<String>::new();
-				els.filter_map(|a| {
-					let href = a.attr("href")?;
-					let key = normalize_key(&href);
-					if keys.contains(&key) {
-						return None;
-					}
-					keys.push(key.clone());
-					let title = a.text().map(clean_text).filter(|t| !t.is_empty());
-					Some(Chapter {
-						key,
-						title,
-						url: Some(absolute_url(&href)),
-						..Default::default()
+			manga.chapters = html
+				.select(
+					"a.j-chapter-link[href^='/index.php/chapter/'], a[href^='/index.php/chapter/']",
+				)
+				.map(|els| {
+					let mut keys = Vec::<String>::new();
+					els.filter_map(|a| {
+						let href = a.attr("href")?;
+						let key = normalize_key(&href);
+						if keys.contains(&key) {
+							return None;
+						}
+						keys.push(key.clone());
+						let title = a.text().map(clean_text).filter(|t| !t.is_empty());
+						Some(Chapter {
+							key,
+							title,
+							url: Some(absolute_url(&href)),
+							..Default::default()
+						})
 					})
-				})
-				.collect()
-			});
+					.collect()
+				});
 		}
 
 		Ok(manga)
@@ -97,7 +107,11 @@ impl Source for Hm69App {
 			.map(|imgs| {
 				imgs.filter_map(|img| {
 					let url = attr_url(&img, "data-original")?;
-					if !(url.ends_with(".jpg") || url.ends_with(".jpeg") || url.ends_with(".png") || url.ends_with(".webp")) {
+					if !(url.ends_with(".jpg")
+						|| url.ends_with(".jpeg")
+						|| url.ends_with(".png")
+						|| url.ends_with(".webp"))
+					{
 						return None;
 					}
 					Some(Page {
@@ -160,9 +174,9 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 				Some(Manga {
 					key,
 					title,
-					cover: a
-						.select_first("img")
-						.and_then(|img| attr_url(&img, "data-original").or_else(|| attr_url(&img, "src"))),
+					cover: a.select_first("img").and_then(|img| {
+						attr_url(&img, "data-original").or_else(|| attr_url(&img, "src"))
+					}),
 					content_rating: ContentRating::NSFW,
 					viewer: Viewer::Webtoon,
 					url: Some(absolute_url(&href)),
@@ -206,6 +220,8 @@ fn attr_url(el: &Element, name: &str) -> Option<String> {
 	el.attr(name).map(|url| {
 		if url.starts_with("//") {
 			format!("https:{url}")
+		} else if url.starts_with("http://") {
+			format!("https://{}", &url[7..])
 		} else if url.starts_with('/') {
 			format!("{BASE_URL}{url}")
 		} else {
@@ -245,4 +261,17 @@ fn hex(value: u8) -> char {
 	}
 }
 
-register_source!(Hm69App, ListingProvider, DeepLinkHandler);
+impl ImageRequestProvider for Hm69App {
+	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
+		Ok(Request::get(url)?
+			.header("User-Agent", "Mozilla/5.0")
+			.header("Referer", BASE_URL))
+	}
+}
+
+register_source!(
+	Hm69App,
+	ListingProvider,
+	DeepLinkHandler,
+	ImageRequestProvider
+);

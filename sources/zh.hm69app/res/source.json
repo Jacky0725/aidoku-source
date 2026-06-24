@@ -2,8 +2,9 @@
 	"info": {
 		"id": "zh.hm69app",
 		"name": "69漫画",
-		"version": 1,
+		"version": 2,
 		"url": "https://hm.69app.org",
+		"minAppVersion": "0.8.3",
 		"contentRating": 2,
 		"languages": ["zh"]
 	},

@@ -1,13 +1,11 @@
 #![no_std]
 
 use aidoku::{
-	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Listing, ListingProvider,
-	Manga, MangaPageResult, MangaStatus, Page, PageContent, Result, Source, UpdateStrategy, Viewer,
+	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, ImageRequestProvider,
+	Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page, PageContent, PageContext,
+	Result, Source, UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString},
-	imports::{
-		html::Element,
-		net::Request,
-	},
+	imports::{html::Element, net::Request},
 	prelude::*,
 };
 
@@ -28,7 +26,10 @@ impl Source for Comics55 {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
-				format!("{BASE_URL}/search.html?keyword={}", encode_query(query.trim()))
+				format!(
+					"{BASE_URL}/search.html?keyword={}",
+					encode_query(query.trim())
+				)
 			}
 			_ => listing_url("latest", page),
 		};
@@ -55,7 +56,9 @@ impl Source for Comics55 {
 				.and_then(|el| attr_url(&el, "content"))
 				.or_else(|| {
 					html.select_first("img[data-original], img[data-src]")
-						.and_then(|img| attr_url(&img, "data-original").or_else(|| attr_url(&img, "data-src")))
+						.and_then(|img| {
+							attr_url(&img, "data-original").or_else(|| attr_url(&img, "data-src"))
+						})
 				});
 			manga.description = html
 				.select_first(".p-t-5.p-b-5, .video-description, .description")
@@ -94,23 +97,29 @@ impl Source for Comics55 {
 	}
 
 	fn get_page_list(&self, _manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
-		let html = Request::get(absolute_url(&chapter.key))?.html()?;
-		Ok(html
-			.select("img[data-original], img[data-src]")
-			.map(|imgs| {
-				imgs.filter_map(|img| {
-					let url = attr_url(&img, "data-original").or_else(|| attr_url(&img, "data-src"))?;
-					if !url.contains("/chapter/") {
-						return None;
-					}
-					Some(Page {
-						content: PageContent::Url(url, None),
-						..Default::default()
-					})
-				})
-				.collect()
-			})
-			.unwrap_or_default())
+		let chapter_url = absolute_url(&chapter.key);
+		let html = Request::get(&chapter_url)?.html()?;
+		let mut pages = parse_page_images(&html);
+		let mut page_urls = Vec::<String>::new();
+
+		if let Some(links) = html.select(".chapter-left .pagination a[href], .pagination a[href]") {
+			for link in links {
+				let Some(href) = link.attr("href") else {
+					continue;
+				};
+				let url = absolute_url(&href);
+				if url != chapter_url && !page_urls.contains(&url) {
+					page_urls.push(url);
+				}
+			}
+		}
+
+		for url in page_urls {
+			let html = Request::get(url)?.html()?;
+			pages.extend(parse_page_images(&html));
+		}
+
+		Ok(pages)
 	}
 }
 
@@ -163,9 +172,11 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 				Some(Manga {
 					key,
 					title,
-					cover: a
-						.select_first("img")
-						.and_then(|img| attr_url(&img, "data-original").or_else(|| attr_url(&img, "data-src")).or_else(|| attr_url(&img, "src"))),
+					cover: a.select_first("img").and_then(|img| {
+						attr_url(&img, "data-original")
+							.or_else(|| attr_url(&img, "data-src"))
+							.or_else(|| attr_url(&img, "src"))
+					}),
 					content_rating: ContentRating::NSFW,
 					viewer: Viewer::Webtoon,
 					url: Some(absolute_url(&href)),
@@ -191,6 +202,25 @@ fn listing_url(id: &str, page: i32) -> String {
 	} else {
 		format!("{BASE_URL}{path}/{page}.html")
 	}
+}
+
+fn parse_page_images(html: &aidoku::imports::html::Document) -> Vec<Page> {
+	html.select(".chapter-left img[data-original], .chapter-left img[data-src]")
+		.or_else(|| html.select("img[data-original], img[data-src]"))
+		.map(|imgs| {
+			imgs.filter_map(|img| {
+				let url = attr_url(&img, "data-original").or_else(|| attr_url(&img, "data-src"))?;
+				if !url.contains("/chapter/") {
+					return None;
+				}
+				Some(Page {
+					content: PageContent::Url(url, None),
+					..Default::default()
+				})
+			})
+			.collect()
+		})
+		.unwrap_or_default()
 }
 
 fn normalize_key(url: &str) -> String {
@@ -248,4 +278,17 @@ fn hex(value: u8) -> char {
 	}
 }
 
-register_source!(Comics55, ListingProvider, DeepLinkHandler);
+impl ImageRequestProvider for Comics55 {
+	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
+		Ok(Request::get(url)?
+			.header("User-Agent", "Mozilla/5.0")
+			.header("Referer", BASE_URL))
+	}
+}
+
+register_source!(
+	Comics55,
+	ListingProvider,
+	DeepLinkHandler,
+	ImageRequestProvider
+);

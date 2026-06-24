@@ -2,8 +2,9 @@
 	"info": {
 		"id": "zh.55comics",
 		"name": "55Comics",
-		"version": 1,
+		"version": 2,
 		"url": "https://www.55comics.com",
+		"minAppVersion": "0.8.3",
 		"contentRating": 2,
 		"languages": ["zh"]
 	},
