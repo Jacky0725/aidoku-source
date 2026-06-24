@@ -2,7 +2,7 @@
 	"info": {
 		"id": "zh.55comics",
 		"name": "55Comics",
-		"version": 2,
+		"version": 3,
 		"url": "https://www.55comics.com",
 		"minAppVersion": "0.8.3",
 		"contentRating": 2,
@@ -10,6 +10,9 @@
 	},
 	"listings": [
 		{ "id": "latest", "name": "最新更新" },
-		{ "id": "popular", "name": "热门排行" }
+		{ "id": "hanman", "name": "韩漫" },
+		{ "id": "popular", "name": "周人气" },
+		{ "id": "popular_total", "name": "总人气" },
+		{ "id": "popular_month", "name": "月人气" }
 	]
 }
