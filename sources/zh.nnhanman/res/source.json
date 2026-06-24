@@ -1,15 +1,23 @@
 {
-	"info": {
-		"id": "zh.nnhanman",
-		"name": "鸟鸟韩漫",
-		"version": 3,
-		"url": "https://nnhanman.xyz",
-		"contentRating": 2,
-		"languages": ["zh"]
-	},
-	"listings": [
-		{ "id": "latest", "name": "最近更新" },
-		{ "id": "newbook", "name": "新书发布" },
-		{ "id": "completed", "name": "已完结" }
-	]
+  "info": {
+    "id": "zh.nnhanman",
+    "name": "鸟鸟韩漫",
+    "version": 8,
+    "url": "https://nnhanman.xyz",
+    "minAppVersion": "0.8.3",
+    "languages": [
+      "zh"
+    ],
+    "contentRating": 2
+  },
+  "listings": [
+    {
+      "name": "最近更新",
+      "id": "latest"
+    },
+    {
+      "name": "排行",
+      "id": "ranking"
+    }
+  ]
 }
