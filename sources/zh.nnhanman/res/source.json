@@ -2,7 +2,7 @@
   "info": {
     "id": "zh.nnhanman",
     "name": "鸟鸟韩漫",
-    "version": 8,
+    "version": 9,
     "url": "https://nnhanman.xyz",
     "minAppVersion": "0.8.3",
     "languages": [
@@ -16,8 +16,16 @@
       "id": "latest"
     },
     {
-      "name": "排行",
-      "id": "ranking"
+      "name": "周榜",
+      "id": "ranking_weekly"
+    },
+    {
+      "name": "月榜",
+      "id": "ranking_monthly"
+    },
+    {
+      "name": "总榜",
+      "id": "ranking_all"
     }
   ]
 }

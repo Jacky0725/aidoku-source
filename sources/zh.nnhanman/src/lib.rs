@@ -1,8 +1,9 @@
 #![no_std]
 
 use aidoku::{
-	Chapter, ContentRating, FilterValue, ImageRequestProvider, Listing, ListingProvider, Manga,
-	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source, Viewer,
+	Chapter, ContentRating, FilterValue, Home, HomeComponent, HomeComponentValue, HomeLayout,
+	ImageRequestProvider, Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page,
+	PageContent, PageContext, Result, Source, Viewer,
 	alloc::{String, Vec, string::ToString, vec},
 	imports::net::Request,
 	prelude::*,
@@ -131,6 +132,31 @@ fn parse_manga_cards(html: aidoku::imports::html::Document) -> Vec<Manga> {
 				.collect::<Vec<Manga>>()
 		})
 		.unwrap_or_default()
+}
+
+fn listing_url(id: &str) -> String {
+	match id {
+		"ranking_weekly" => format!("{}/ranking/weekly", BASE_URL),
+		"ranking_monthly" => format!("{}/ranking/monthly", BASE_URL),
+		"ranking_all" => format!("{}/ranking/all", BASE_URL),
+		_ => format!("{}/update", BASE_URL),
+	}
+}
+
+fn manga_list_component(title: &str, id: &str, ranking: bool) -> Result<HomeComponent> {
+	Ok(HomeComponent {
+		title: Some(title.into()),
+		subtitle: None,
+		value: HomeComponentValue::MangaList {
+			ranking,
+			page_size: Some(12),
+			entries: parse_manga_cards(request(listing_url(id))?)
+				.into_iter()
+				.map(|manga| manga.into())
+				.collect(),
+			listing: None,
+		},
+	})
 }
 
 impl Source for NnHanman {
@@ -298,15 +324,22 @@ impl ListingProvider for NnHanman {
 			});
 		}
 
-		let url = match listing.id.as_str() {
-			"latest" => format!("{}/update", BASE_URL),
-			"ranking" => format!("{}/ranking/weekly", BASE_URL),
-			_ => format!("{}/update", BASE_URL),
-		};
-
 		Ok(MangaPageResult {
-			entries: parse_manga_cards(request(url)?),
+			entries: parse_manga_cards(request(listing_url(&listing.id))?),
 			has_next_page: false,
+		})
+	}
+}
+
+impl Home for NnHanman {
+	fn get_home(&self) -> Result<HomeLayout> {
+		Ok(HomeLayout {
+			components: vec![
+				manga_list_component("最近更新", "latest", false)?,
+				manga_list_component("周榜", "ranking_weekly", true)?,
+				manga_list_component("月榜", "ranking_monthly", true)?,
+				manga_list_component("总榜", "ranking_all", true)?,
+			],
 		})
 	}
 }
@@ -319,4 +352,4 @@ impl ImageRequestProvider for NnHanman {
 	}
 }
 
-register_source!(NnHanman, ListingProvider, ImageRequestProvider);
+register_source!(NnHanman, ListingProvider, Home, ImageRequestProvider);
