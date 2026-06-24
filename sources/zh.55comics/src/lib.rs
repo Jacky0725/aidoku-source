@@ -194,13 +194,16 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 
 fn listing_url(id: &str, page: i32) -> String {
 	let path = match id {
+		"hanman" => "/lists/hanman",
+		"popular_total" => "/all/order/hits",
+		"popular_month" => "/all/order/hits_month",
 		"popular" => "/all/order/hits_week",
 		_ => "/all/order/update_time",
 	};
 	if page <= 1 {
 		format!("{BASE_URL}{path}.html")
 	} else {
-		format!("{BASE_URL}{path}/{page}.html")
+		format!("{BASE_URL}{path}.html?p={page}")
 	}
 }
 
