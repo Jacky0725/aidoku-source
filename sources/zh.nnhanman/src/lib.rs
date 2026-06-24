@@ -235,18 +235,24 @@ impl Source for NnHanman {
 		}
 
 		if needs_chapters {
-			let chapter_nodes = html.select("a[href*='/comic/'][href*='/chapter-']");
+			let chapter_nodes = html.select("#mh-chapter-list-ol-0 a[href*='/comic/'][href*='/chapter-']");
 			let mut chapters: Vec<Chapter> = Vec::new();
 
 			if let Some(nodes) = chapter_nodes {
-				let links = nodes.collect::<Vec<_>>();
+				let links = nodes
+					.filter(|item| {
+						item.attr("href")
+							.map(|href| href.contains("/chapter-") && !href.ends_with("chapter-.html"))
+							.unwrap_or(false)
+					})
+					.collect::<Vec<_>>();
 				let len = links.len();
 
 				for (index, item) in links.into_iter().enumerate() {
 					let Some(href) = item.attr("href") else {
 						continue;
 					};
-					if !href.contains("/comic/") || !href.contains("/chapter-") {
+					if !href.contains("/comic/") || !href.contains("/chapter-") || href.ends_with("chapter-.html") {
 						continue;
 					}
 
