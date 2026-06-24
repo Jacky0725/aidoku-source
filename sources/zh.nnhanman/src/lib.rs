@@ -295,7 +295,7 @@ impl Source for NnHanman {
 		let html = request(chapter_url)?;
 
 		let pages = html
-			.select("img.lazy, .comic-cont img, .read-content img, article img, .content img, img")
+			.select(".view-imgBox img")
 			.map(|nodes| {
 				nodes
 					.filter_map(|item| {
@@ -309,7 +309,7 @@ impl Source for NnHanman {
 						}
 
 						Some(Page {
-							content: PageContent::url(url),
+							content: PageContent::url(absolute_url(&url)),
 							..Default::default()
 						})
 					})
