@@ -2,7 +2,7 @@
 	"info": {
 		"id": "zh.comicbox",
 		"name": "污污漫画",
-		"version": 1,
+		"version": 2,
 		"url": "https://www.comicbox.xyz",
 		"minAppVersion": "0.8.3",
 		"contentRating": 2,
@@ -10,7 +10,6 @@
 	},
 	"listings": [
 		{ "id": "home", "name": "首页" },
-		{ "id": "all", "name": "分类" },
-		{ "id": "rank", "name": "排行" }
+		{ "id": "all", "name": "分类" }
 	]
 }

@@ -28,7 +28,7 @@ impl Source for Rouman5 {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
-				format!("{BASE_URL}/search?q={}", encode_query(query.trim()))
+				format!("{BASE_URL}/books?keyword={}", encode_query(query.trim()))
 			}
 			_ => listing_url("home", page),
 		};

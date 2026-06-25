@@ -150,7 +150,7 @@ impl Home for ComicBox {
 		Ok(HomeLayout {
 			components: vec![
 				manga_list_component("首页", "home", false)?,
-				manga_list_component("排行", "rank", true)?,
+				manga_list_component("分类", "all", false)?,
 			],
 		})
 	}
@@ -228,7 +228,6 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 fn listing_url(id: &str, page: i32) -> String {
 	let path = match id {
 		"all" => "/booklist",
-		"rank" => "/rank",
 		_ => "/index",
 	};
 	if page <= 1 {
