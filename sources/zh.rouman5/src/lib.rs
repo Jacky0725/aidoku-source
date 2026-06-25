@@ -83,9 +83,9 @@ impl Source for Rouman5 {
 			}
 			keys.push(url.clone());
 			let mut context = PageContext::new();
-			context.insert(String::from("url"), url);
+			context.insert(String::from("url"), url.clone());
 			pages.push(Page {
-				content: PageContent::url_context(PAGE_TRIGGER_URL, context),
+				content: PageContent::url_context(&unique_trigger_url(&url), context),
 				..Default::default()
 			});
 		}
@@ -391,6 +391,19 @@ fn hex(value: u8) -> char {
 		0..=9 => (b'0' + value) as char,
 		_ => (b'A' + value - 10) as char,
 	}
+}
+
+fn unique_trigger_url(url: &str) -> String {
+	format!("{PAGE_TRIGGER_URL}?aidoku={}", simple_hash(url))
+}
+
+fn simple_hash(value: &str) -> u32 {
+	let mut hash = 2_166_136_261u32;
+	for byte in value.as_bytes() {
+		hash ^= *byte as u32;
+		hash = hash.wrapping_mul(16_777_619);
+	}
+	hash
 }
 
 impl ImageRequestProvider for Rouman5 {

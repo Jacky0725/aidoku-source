@@ -7,7 +7,12 @@ use aidoku::{
 	MangaPageResult, MangaStatus, Page, PageContent, PageContext, PageImageProcessor, Result,
 	Source, UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString, vec},
-	imports::{canvas::ImageRef, error::AidokuError, html::Element, net::Request},
+	imports::{
+		canvas::{Canvas, ImageRef, Rect},
+		error::AidokuError,
+		html::Element,
+		net::Request,
+	},
 	prelude::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -15,6 +20,7 @@ use cbc::{
 	Decryptor,
 	cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7},
 };
+use md5::{Digest, Md5};
 
 const BASE_URL: &str = "https://www.comicbox.xyz";
 const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
@@ -138,9 +144,9 @@ impl Source for ComicBox {
 					}
 					urls.push(url.clone());
 					let mut context = PageContext::new();
-					context.insert(String::from("url"), url);
+					context.insert(String::from("url"), url.clone());
 					Some(Page {
-						content: PageContent::url_context(PAGE_TRIGGER_URL, context),
+						content: PageContent::url_context(&unique_trigger_url(&url), context),
 						..Default::default()
 					})
 				})
@@ -287,11 +293,18 @@ fn attr_url(el: &Element, name: &str) -> Option<String> {
 }
 
 fn recover_image(url: &str) -> Result<ImageRef> {
-	Ok(ImageRef::new(&recover_image_data(url)?))
+	let (data, book_id, page_number) = recover_image_data(url)?;
+	let image = ImageRef::new(&data);
+	if book_id > 0 {
+		Ok(merge_manga_image(image, book_id, page_number))
+	} else {
+		Ok(image)
+	}
 }
 
 fn recover_data_url(url: &str) -> Option<String> {
-	let data = recover_image_data(url).ok()?;
+	let image = recover_image(url).ok()?;
+	let data = image.data();
 	let mime = match data.get(0..4) {
 		Some([0xff, 0xd8, 0xff, _]) => "image/jpeg",
 		Some([0x89, 0x50, 0x4e, 0x47]) => "image/png",
@@ -301,7 +314,7 @@ fn recover_data_url(url: &str) -> Option<String> {
 	Some(format!("data:{mime};base64,{}", STANDARD.encode(data)))
 }
 
-fn recover_image_data(url: &str) -> Result<Vec<u8>> {
+fn recover_image_data(url: &str) -> Result<(Vec<u8>, i32, i32)> {
 	let split_urls = split_image_urls(url);
 	let mut data = Vec::<u8>::new();
 
@@ -314,8 +327,9 @@ fn recover_image_data(url: &str) -> Result<Vec<u8>> {
 		data.append(&mut decrypted);
 	}
 
+	let (book_id, page_number) = parse_magic_info(&data)?;
 	inject_magic_number(&mut data)?;
-	Ok(data)
+	Ok((data, book_id, page_number))
 }
 
 fn split_image_urls(url: &str) -> Vec<String> {
@@ -362,6 +376,23 @@ fn decrypt_bytes(data: Vec<u8>) -> Result<Vec<u8>> {
 		.map_err(|_| AidokuError::message("failed to decrypt comicbox image"))
 }
 
+fn parse_magic_info(data: &[u8]) -> Result<(i32, i32)> {
+	if data.len() < 8 {
+		return Err(AidokuError::message("invalid comicbox image data"));
+	}
+	match data[1] {
+		0 => {
+			let book_id = data[2] as i32 * 256 + data[3] as i32;
+			let page_number = data[4] as i32 * 16_777_216
+				+ data[5] as i32 * 65_536
+				+ data[6] as i32 * 256
+				+ data[7] as i32;
+			Ok((book_id, page_number))
+		}
+		_ => Ok((0, 0)),
+	}
+}
+
 fn inject_magic_number(data: &mut [u8]) -> Result<()> {
 	if data.len() < 12 {
 		return Err(AidokuError::message("invalid comicbox image data"));
@@ -378,6 +409,79 @@ fn inject_magic_number(data: &mut [u8]) -> Result<()> {
 		_ => return Err(AidokuError::message("unknown comicbox image type")),
 	}
 	Ok(())
+}
+
+fn merge_manga_image(image: ImageRef, book_id: i32, page_number: i32) -> ImageRef {
+	let width = image.width();
+	let height = image.height();
+	let count = get_crop_count(book_id, page_number);
+	if width <= 0.0 || height <= 0.0 || count <= 1 {
+		return image;
+	}
+
+	let mut canvas = Canvas::new(width, height);
+	let height_i = height as i32;
+	let base_height = (height_i / count) as f32;
+	let remainder = (height_i % count) as f32;
+
+	for index in 0..count {
+		let mut part_height = base_height;
+		let mut dst_y = base_height * index as f32;
+		let src_y = height - base_height * (index as f32 + 1.0) - remainder;
+		let src_y = if index == 0 {
+			part_height += remainder;
+			src_y
+		} else {
+			dst_y += remainder;
+			src_y
+		};
+
+		canvas.copy_image(
+			&image,
+			Rect::new(0.0, src_y, width, part_height),
+			Rect::new(0.0, dst_y, width, part_height),
+		);
+	}
+
+	canvas.get_image()
+}
+
+fn get_crop_count(book_id: i32, page_number: i32) -> i32 {
+	let text = format!("{book_id}{page_number}");
+	let digest = Md5::digest(text.as_bytes());
+	let last = digest[15] & 0x0f;
+	match (hex_char(last) as i32) % 10 {
+		0 => 44,
+		1 => 48,
+		2 => 52,
+		3 => 56,
+		4 => 60,
+		5 => 64,
+		6 => 68,
+		7 => 72,
+		8 => 76,
+		_ => 80,
+	}
+}
+
+fn hex_char(value: u8) -> u8 {
+	match value {
+		0..=9 => b'0' + value,
+		_ => b'a' + value - 10,
+	}
+}
+
+fn unique_trigger_url(url: &str) -> String {
+	format!("{PAGE_TRIGGER_URL}?aidoku={}", simple_hash(url))
+}
+
+fn simple_hash(value: &str) -> u32 {
+	let mut hash = 2_166_136_261u32;
+	for byte in value.as_bytes() {
+		hash ^= *byte as u32;
+		hash = hash.wrapping_mul(16_777_619);
+	}
+	hash
 }
 
 fn is_image_url(url: &str) -> bool {
