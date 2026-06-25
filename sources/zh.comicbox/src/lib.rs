@@ -4,12 +4,13 @@ use aes::Aes128;
 use aidoku::{
 	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Home, HomeComponent,
 	HomeComponentValue, HomeLayout, ImageRequestProvider, Listing, ListingProvider, Manga,
-	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source, UpdateStrategy,
-	Viewer,
+	MangaPageResult, MangaStatus, Page, PageContent, PageContext, PageImageProcessor, Result,
+	Source, UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString, vec},
 	imports::{canvas::ImageRef, error::AidokuError, html::Element, net::Request},
 	prelude::*,
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
 use cbc::{
 	Decryptor,
 	cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7},
@@ -18,6 +19,7 @@ use cbc::{
 const BASE_URL: &str = "https://www.comicbox.xyz";
 const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
 const CACHE_KEY: &str = "2026021808";
+const PAGE_TRIGGER_URL: &str = "https://www.comicbox.xyz/static/images/logo.png";
 
 struct ComicBox;
 
@@ -62,11 +64,12 @@ impl Source for ComicBox {
 				.map(strip_site_title)
 				.unwrap_or(manga.title);
 			manga.cover = html
-				.select_first("meta[property='og:image']")
-				.and_then(|el| attr_url(&el, "content"))
+				.select_first(".sp-book-cover .cropped[data-src]")
+				.and_then(|el| attr_url(&el, "data-src"))
+				.and_then(|url| recover_data_url(&url).or(Some(url)))
 				.or_else(|| {
-					html.select_first(".sp-book-cover .cropped[data-src]")
-						.and_then(|el| attr_url(&el, "data-src"))
+					html.select_first("meta[property='og:image']")
+						.and_then(|el| attr_url(&el, "content"))
 				})
 				.or(manga.cover);
 			manga.description = html
@@ -134,8 +137,10 @@ impl Source for ComicBox {
 						return None;
 					}
 					urls.push(url.clone());
+					let mut context = PageContext::new();
+					context.insert(String::from("url"), url);
 					Some(Page {
-						content: PageContent::image(recover_image(&url).ok()?),
+						content: PageContent::url_context(PAGE_TRIGGER_URL, context),
 						..Default::default()
 					})
 				})
@@ -211,6 +216,7 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 					cover: a
 						.select_first(".cropped[data-src]")
 						.and_then(|el| attr_url(&el, "data-src"))
+						.and_then(|url| recover_data_url(&url).or(Some(url)))
 						.or_else(|| {
 							a.select_first("img").and_then(|img| {
 								attr_url(&img, "data-src").or_else(|| attr_url(&img, "src"))
@@ -281,6 +287,21 @@ fn attr_url(el: &Element, name: &str) -> Option<String> {
 }
 
 fn recover_image(url: &str) -> Result<ImageRef> {
+	Ok(ImageRef::new(&recover_image_data(url)?))
+}
+
+fn recover_data_url(url: &str) -> Option<String> {
+	let data = recover_image_data(url).ok()?;
+	let mime = match data.get(0..4) {
+		Some([0xff, 0xd8, 0xff, _]) => "image/jpeg",
+		Some([0x89, 0x50, 0x4e, 0x47]) => "image/png",
+		Some([0x47, 0x49, 0x46, _]) => "image/gif",
+		_ => "image/jpeg",
+	};
+	Some(format!("data:{mime};base64,{}", STANDARD.encode(data)))
+}
+
+fn recover_image_data(url: &str) -> Result<Vec<u8>> {
 	let split_urls = split_image_urls(url);
 	let mut data = Vec::<u8>::new();
 
@@ -294,7 +315,7 @@ fn recover_image(url: &str) -> Result<ImageRef> {
 	}
 
 	inject_magic_number(&mut data)?;
-	Ok(ImageRef::new(&data))
+	Ok(data)
 }
 
 fn split_image_urls(url: &str) -> Vec<String> {
@@ -413,10 +434,25 @@ impl ImageRequestProvider for ComicBox {
 	}
 }
 
+impl PageImageProcessor for ComicBox {
+	fn process_page_image(
+		&self,
+		response: aidoku::ImageResponse,
+		context: Option<PageContext>,
+	) -> Result<ImageRef> {
+		if let Some(url) = context.and_then(|context| context.get("url").cloned()) {
+			recover_image(&url)
+		} else {
+			Ok(response.image)
+		}
+	}
+}
+
 register_source!(
 	ComicBox,
 	ListingProvider,
 	Home,
 	DeepLinkHandler,
-	ImageRequestProvider
+	ImageRequestProvider,
+	PageImageProcessor
 );

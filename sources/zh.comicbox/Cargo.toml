@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 aidoku = { git = "https://github.com/Aidoku/aidoku-rs.git", version = "0.3.0" }
 aes = { version = "0.8", default-features = false }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 cbc = { version = "0.1", default-features = false, features = ["alloc", "block-padding"] }
 
 [dev-dependencies]
