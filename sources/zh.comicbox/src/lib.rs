@@ -316,16 +316,33 @@ fn recover_data_url(url: &str) -> Option<String> {
 
 fn recover_image_data(url: &str) -> Result<(Vec<u8>, i32, i32)> {
 	let split_urls = split_image_urls(url);
-	let mut data = Vec::<u8>::new();
+	let use_new_decryption = split_urls
+		.first()
+		.map(|url| url.contains("/break_avif/"))
+		.unwrap_or(false);
+	let mut encrypted_buffers = Vec::<Vec<u8>>::new();
 
 	for url in split_urls {
 		let encrypted = Request::get(&url)?
 			.header("User-Agent", UA)
 			.header("Referer", BASE_URL)
+			.header("Accept", "*/*")
+			.header("Accept-Encoding", "identity")
 			.data()?;
-		let mut decrypted = decrypt_bytes(encrypted)?;
-		data.append(&mut decrypted);
+		encrypted_buffers.push(encrypted);
 	}
+
+	let mut data = if use_new_decryption {
+		let encrypted = combine_bytes(encrypted_buffers);
+		decrypt_bytes(encrypted)?
+	} else {
+		let mut data = Vec::<u8>::new();
+		for encrypted in encrypted_buffers {
+			let mut decrypted = decrypt_bytes(encrypted)?;
+			data.append(&mut decrypted);
+		}
+		data
+	};
 
 	let (book_id, page_number) = parse_magic_info(&data)?;
 	inject_magic_number(&mut data)?;
@@ -333,10 +350,11 @@ fn recover_image_data(url: &str) -> Result<(Vec<u8>, i32, i32)> {
 }
 
 fn split_image_urls(url: &str) -> Vec<String> {
+	let use_avif = url.contains("/break_avif/");
 	let clean = strip_query(url)
 		.replace("/break_2/", "/")
 		.replace("/break_avif/", "/");
-	let with_path = insert_break_path(&clean);
+	let with_path = insert_break_path(&clean, use_avif);
 	vec![
 		replace_extension(&with_path, ".b_0"),
 		replace_extension(&with_path, ".b_1"),
@@ -350,10 +368,11 @@ fn strip_query(url: &str) -> &str {
 	url.split('?').next().unwrap_or(url)
 }
 
-fn insert_break_path(url: &str) -> String {
+fn insert_break_path(url: &str, use_avif: bool) -> String {
+	let break_path = if use_avif { "break_avif" } else { "break_2" };
 	if let Some(index) = url[8..].find('/') {
 		let split = index + 8;
-		format!("{}/break_2{}", &url[..split], &url[split..])
+		format!("{}/{break_path}{}", &url[..split], &url[split..])
 	} else {
 		url.to_string()
 	}
@@ -366,6 +385,15 @@ fn replace_extension(url: &str, replacement: &str) -> String {
 		}
 	}
 	url.to_string()
+}
+
+fn combine_bytes(buffers: Vec<Vec<u8>>) -> Vec<u8> {
+	let size = buffers.iter().map(|buffer| buffer.len()).sum();
+	let mut data = Vec::<u8>::with_capacity(size);
+	for mut buffer in buffers {
+		data.append(&mut buffer);
+	}
+	data
 }
 
 fn decrypt_bytes(data: Vec<u8>) -> Result<Vec<u8>> {
