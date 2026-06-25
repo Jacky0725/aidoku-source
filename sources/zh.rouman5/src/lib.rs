@@ -3,16 +3,15 @@
 use aidoku::{
 	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Home, HomeComponent,
 	HomeComponentValue, HomeLayout, ImageRequestProvider, Listing, ListingProvider, Manga,
-	MangaPageResult, MangaStatus, Page, PageContent, PageContext, PageImageProcessor, Result,
-	Source, UpdateStrategy, Viewer,
+	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source, UpdateStrategy,
+	Viewer,
 	alloc::{String, Vec, format, string::ToString, vec},
-	imports::{canvas::ImageRef, html::Element, net::Request},
+	imports::{html::Element, net::Request},
 	prelude::*,
 };
 
 const BASE_URL: &str = "https://rouman5.com";
 const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
-const PAGE_TRIGGER_URL: &str = "https://rouman5.com/android-chrome-192x192.png";
 
 struct Rouman5;
 
@@ -82,10 +81,8 @@ impl Source for Rouman5 {
 				continue;
 			}
 			keys.push(url.clone());
-			let mut context = PageContext::new();
-			context.insert(String::from("url"), url.clone());
 			pages.push(Page {
-				content: PageContent::url_context(&unique_trigger_url(&url), context),
+				content: PageContent::Url(url, None),
 				..Default::default()
 			});
 		}
@@ -393,19 +390,6 @@ fn hex(value: u8) -> char {
 	}
 }
 
-fn unique_trigger_url(url: &str) -> String {
-	format!("{PAGE_TRIGGER_URL}?aidoku={}", simple_hash(url))
-}
-
-fn simple_hash(value: &str) -> u32 {
-	let mut hash = 2_166_136_261u32;
-	for byte in value.as_bytes() {
-		hash ^= *byte as u32;
-		hash = hash.wrapping_mul(16_777_619);
-	}
-	hash
-}
-
 impl ImageRequestProvider for Rouman5 {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
 		Ok(Request::get(url)?
@@ -419,34 +403,10 @@ impl ImageRequestProvider for Rouman5 {
 	}
 }
 
-impl PageImageProcessor for Rouman5 {
-	fn process_page_image(
-		&self,
-		response: aidoku::ImageResponse,
-		context: Option<PageContext>,
-	) -> Result<ImageRef> {
-		if let Some(url) = context.and_then(|context| context.get("url").cloned()) {
-			let data = Request::get(url)?
-				.header("User-Agent", UA)
-				.header("Referer", BASE_URL)
-				.header(
-					"Accept",
-					"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-				)
-				.header("Accept-Encoding", "identity")
-				.data()?;
-			Ok(ImageRef::new(&data))
-		} else {
-			Ok(response.image)
-		}
-	}
-}
-
 register_source!(
 	Rouman5,
 	ListingProvider,
 	Home,
 	DeepLinkHandler,
-	ImageRequestProvider,
-	PageImageProcessor
+	ImageRequestProvider
 );
