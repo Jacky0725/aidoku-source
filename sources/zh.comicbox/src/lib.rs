@@ -1,17 +1,23 @@
 #![no_std]
 
+use aes::Aes128;
 use aidoku::{
 	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, Home, HomeComponent,
 	HomeComponentValue, HomeLayout, ImageRequestProvider, Listing, ListingProvider, Manga,
 	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source, UpdateStrategy,
 	Viewer,
 	alloc::{String, Vec, format, string::ToString, vec},
-	imports::{html::Element, net::Request},
+	imports::{canvas::ImageRef, error::AidokuError, html::Element, net::Request},
 	prelude::*,
+};
+use cbc::{
+	Decryptor,
+	cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7},
 };
 
 const BASE_URL: &str = "https://www.comicbox.xyz";
 const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+const CACHE_KEY: &str = "2026021808";
 
 struct ComicBox;
 
@@ -56,11 +62,11 @@ impl Source for ComicBox {
 				.map(strip_site_title)
 				.unwrap_or(manga.title);
 			manga.cover = html
-				.select_first(".sp-book-cover .cropped[data-src]")
-				.and_then(|el| attr_url(&el, "data-src"))
+				.select_first("meta[property='og:image']")
+				.and_then(|el| attr_url(&el, "content"))
 				.or_else(|| {
-					html.select_first("meta[property='og:image']")
-						.and_then(|el| attr_url(&el, "content"))
+					html.select_first(".sp-book-cover .cropped[data-src]")
+						.and_then(|el| attr_url(&el, "data-src"))
 				})
 				.or(manga.cover);
 			manga.description = html
@@ -129,7 +135,7 @@ impl Source for ComicBox {
 					}
 					urls.push(url.clone());
 					Some(Page {
-						content: PageContent::Url(url, None),
+						content: PageContent::image(recover_image(&url).ok()?),
 						..Default::default()
 					})
 				})
@@ -272,6 +278,85 @@ fn absolute_url(url: &str) -> String {
 
 fn attr_url(el: &Element, name: &str) -> Option<String> {
 	el.attr(name).map(|url| absolute_url(&url))
+}
+
+fn recover_image(url: &str) -> Result<ImageRef> {
+	let split_urls = split_image_urls(url);
+	let mut data = Vec::<u8>::new();
+
+	for url in split_urls {
+		let encrypted = Request::get(&url)?
+			.header("User-Agent", UA)
+			.header("Referer", BASE_URL)
+			.data()?;
+		let mut decrypted = decrypt_bytes(encrypted)?;
+		data.append(&mut decrypted);
+	}
+
+	inject_magic_number(&mut data)?;
+	Ok(ImageRef::new(&data))
+}
+
+fn split_image_urls(url: &str) -> Vec<String> {
+	let clean = strip_query(url)
+		.replace("/break_2/", "/")
+		.replace("/break_avif/", "/");
+	let with_path = insert_break_path(&clean);
+	vec![
+		replace_extension(&with_path, ".b_0"),
+		replace_extension(&with_path, ".b_1"),
+	]
+	.into_iter()
+	.map(|url| format!("{url}?v={CACHE_KEY}"))
+	.collect()
+}
+
+fn strip_query(url: &str) -> &str {
+	url.split('?').next().unwrap_or(url)
+}
+
+fn insert_break_path(url: &str) -> String {
+	if let Some(index) = url[8..].find('/') {
+		let split = index + 8;
+		format!("{}/break_2{}", &url[..split], &url[split..])
+	} else {
+		url.to_string()
+	}
+}
+
+fn replace_extension(url: &str, replacement: &str) -> String {
+	for ext in [".jpeg", ".jpg", ".png", ".gif", ".avif", ".webp"] {
+		if url.to_ascii_lowercase().ends_with(ext) {
+			return format!("{}{}", &url[..url.len() - ext.len()], replacement);
+		}
+	}
+	url.to_string()
+}
+
+fn decrypt_bytes(data: Vec<u8>) -> Result<Vec<u8>> {
+	let key = *b"aaaaaaaaaaaaaaaa";
+	let iv = *b"0123456789aaaaaa";
+	Decryptor::<Aes128>::new(&key.into(), &iv.into())
+		.decrypt_padded_vec_mut::<Pkcs7>(&data)
+		.map_err(|_| AidokuError::message("failed to decrypt comicbox image"))
+}
+
+fn inject_magic_number(data: &mut [u8]) -> Result<()> {
+	if data.len() < 12 {
+		return Err(AidokuError::message("invalid comicbox image data"));
+	}
+	match data[0] {
+		0 => data[..12].copy_from_slice(&[
+			0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+		]),
+		1 => data[..8].copy_from_slice(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+		3 => data[..6].copy_from_slice(&[0x47, 0x49, 0x46, 0x38, 0x39, 0x61]),
+		4 => data[..12].copy_from_slice(&[
+			0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66,
+		]),
+		_ => return Err(AidokuError::message("unknown comicbox image type")),
+	}
+	Ok(())
 }
 
 fn is_image_url(url: &str) -> bool {

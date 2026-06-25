@@ -394,7 +394,12 @@ impl ImageRequestProvider for Rouman5 {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
 		Ok(Request::get(url)?
 			.header("User-Agent", UA)
-			.header("Referer", BASE_URL))
+			.header("Referer", BASE_URL)
+			.header(
+				"Accept",
+				"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+			)
+			.header("Accept-Encoding", "identity"))
 	}
 }
 
