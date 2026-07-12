@@ -22,7 +22,26 @@ fn request(url: String) -> Result<aidoku::imports::html::Document> {
 }
 
 fn encode_query(query: String) -> String {
-	query.replace(" ", "%20")
+	let mut output = String::new();
+	for byte in query.as_bytes() {
+		if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b'.' | b'~') {
+			output.push(*byte as char);
+		} else if *byte == b' ' {
+			output.push_str("%20");
+		} else {
+			output.push('%');
+			output.push(hex(byte >> 4));
+			output.push(hex(byte & 0x0f));
+		}
+	}
+	output
+}
+
+fn hex(value: u8) -> char {
+	match value {
+		0..=9 => (b'0' + value) as char,
+		_ => (b'A' + value - 10) as char,
+	}
 }
 
 fn extract_manga_key(href: &str) -> String {
@@ -134,6 +153,46 @@ fn parse_manga_cards(html: aidoku::imports::html::Document) -> Vec<Manga> {
 		.unwrap_or_default()
 }
 
+fn parse_search_manga_cards(html: aidoku::imports::html::Document) -> Vec<Manga> {
+	html.select("a.ImgA[href*='/comic/']")
+		.map(|items| {
+			items
+				.filter_map(|item| {
+					let href = item.attr("href")?;
+					let key = extract_manga_key(&href);
+					if key.is_empty() {
+						return None;
+					}
+
+					let title = item
+						.attr("title")
+						.or_else(|| item.select_first("img").and_then(|img| img.attr("alt")))
+						.or_else(|| item.text())
+						.map(|title| title.trim().to_string())
+						.filter(|title| !title.is_empty())?;
+
+					let cover = item.select_first("img").and_then(|img| {
+						img.attr("src")
+							.or_else(|| img.attr("data-src"))
+							.or_else(|| img.attr("data-original"))
+							.map(|url| absolute_url(&url))
+					});
+
+					Some(Manga {
+						key: key.clone(),
+						title,
+						cover,
+						url: Some(format!("{}/comic/{}.html", BASE_URL, key)),
+						content_rating: ContentRating::NSFW,
+						viewer: Viewer::Webtoon,
+						..Default::default()
+					})
+				})
+				.collect::<Vec<Manga>>()
+		})
+		.unwrap_or_default()
+}
+
 fn listing_url(id: &str) -> String {
 	match id {
 		"ranking_weekly" => format!("{}/ranking/weekly", BASE_URL),
@@ -184,7 +243,11 @@ impl Source for NnHanman {
 			format!("{}/update", BASE_URL)
 		};
 
-		let entries = parse_manga_cards(request(url)?);
+		let entries = if is_search {
+			parse_search_manga_cards(request(url)?)
+		} else {
+			parse_manga_cards(request(url)?)
+		};
 		let has_next_page = is_search && !entries.is_empty();
 
 		Ok(MangaPageResult {
