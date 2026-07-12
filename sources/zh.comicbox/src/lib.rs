@@ -42,6 +42,12 @@ impl Source for ComicBox {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
+				if page > 1 {
+					return Ok(MangaPageResult {
+						entries: Vec::new(),
+						has_next_page: false,
+					});
+				}
 				format!("{BASE_URL}/search?keyword={}", encode_query(query.trim()))
 			}
 			_ => listing_url("home", page),
@@ -194,7 +200,7 @@ impl DeepLinkHandler for ComicBox {
 
 fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 	let html = Request::get(url)?.header("User-Agent", UA).html()?;
-	let entries = html
+	let entries: Vec<Manga> = html
 		.select("a[href^='/book/']")
 		.map(|els| {
 			let mut keys = Vec::<String>::new();
@@ -237,9 +243,10 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 			.collect()
 		})
 		.unwrap_or_default();
+	let has_next_page = !entries.is_empty();
 	Ok(MangaPageResult {
 		entries,
-		has_next_page: true,
+		has_next_page,
 	})
 }
 

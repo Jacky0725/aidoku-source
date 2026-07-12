@@ -28,7 +28,11 @@ impl Source for Rouman5 {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
-				format!("{BASE_URL}/books?keyword={}", encode_query(query.trim()))
+				let mut url = format!("{BASE_URL}/books?keyword={}", encode_query(query.trim()));
+				if page > 1 {
+					url = format!("{url}&page={page}");
+				}
+				url
 			}
 			_ => listing_url("home", page),
 		};
@@ -136,7 +140,7 @@ fn request_string(url: &str) -> Result<String> {
 
 fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 	let html = Request::get(url)?.header("User-Agent", UA).html()?;
-	let entries = html
+	let entries: Vec<Manga> = html
 		.select("a[href^='/books/']")
 		.map(|els| {
 			let mut keys = Vec::<String>::new();
@@ -178,10 +182,11 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 			.collect()
 		})
 		.unwrap_or_default();
+	let has_next_page = !entries.is_empty();
 
 	Ok(MangaPageResult {
 		entries,
-		has_next_page: true,
+		has_next_page,
 	})
 }
 
