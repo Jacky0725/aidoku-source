@@ -26,7 +26,7 @@ impl Source for Kmh001 {
 	) -> Result<MangaPageResult> {
 		let url = match query {
 			Some(query) if !query.trim().is_empty() => {
-				format!("{BASE_URL}/search?keyword={}", encode_query(query.trim()))
+				format!("{BASE_URL}/search?key={}", encode_query(query.trim()))
 			}
 			_ => listing_url("latest", page),
 		};
