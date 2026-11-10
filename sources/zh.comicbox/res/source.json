@@ -2,8 +2,8 @@
 	"info": {
 		"id": "zh.comicbox",
 		"name": "污污漫画",
-		"version": 7,
-		"url": "https://www.comicbox.xyz",
+		"version": 8,
+		"url": "https://www.55comic.com",
 		"minAppVersion": "0.8.3",
 		"contentRating": 2,
 		"languages": ["zh"]

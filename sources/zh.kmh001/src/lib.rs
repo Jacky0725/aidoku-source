@@ -136,9 +136,8 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 				keys.push(key.clone());
 				let cover = a
 					.select_first("img")
-					.and_then(|img| attr_url(&img, "src").or_else(|| attr_url(&img, "data-src")))
-					.filter(|url| !is_placeholder_image(url))
-					.or_else(|| detail_cover_for_key(&key));
+					.and_then(|img| attr_url(&img, "data-src").or_else(|| attr_url(&img, "src")))
+					.filter(|url| !is_placeholder_image(url));
 				Some(Manga {
 					key,
 					title,
@@ -210,13 +209,6 @@ fn next_json_url(body: &str, pos: &mut usize) -> Option<String> {
 	let value = unescape_json(&body[*pos..*pos + end]);
 	*pos += end;
 	Some(value)
-}
-
-fn detail_cover_for_key(key: &str) -> Option<String> {
-	let body = Request::get(absolute_url(key)).ok()?.string().ok()?;
-	meta_content(&body, "og:image")
-		.or_else(|| meta_content(&body, "twitter:image"))
-		.or_else(|| first_image_url(&body))
 }
 
 fn meta_content(body: &str, property: &str) -> Option<String> {

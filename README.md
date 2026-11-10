@@ -7,8 +7,9 @@
 | 书源 | ID | 网站 | 版本 |
 | --- | --- | --- | ---: |
 | 55Comics | `zh.55comics` | https://www.55comics.com | 3 |
-| 污污漫画 | `zh.comicbox` | https://www.comicbox.xyz | 7 |
-| K漫画 | `zh.kmh001` | https://kmh001.com | 3 |
+| 污污漫画 | `zh.comicbox` | https://www.55comic.com | 8 |
+| 禁漫天堂（18mh） | `zh.18mh` | https://18mh.net | 1 |
+| K漫画 | `zh.kmh001` | https://kmh001.com | 4 |
 | 开心看漫画 | `zh.kxmanhua` | https://kxmanhua.com | 3 |
 | 鸟鸟韩漫 | `zh.nnhanman` | https://nnhanman.xyz | 12 |
 | 肉漫屋 | `zh.rouman5` | https://rouman5.com | 9 |
@@ -33,18 +34,19 @@ https://jacky0725.github.io/aidoku-source/index.min.json
 
 ## 检查记录（2026-11-10）
 
-本次检查了源代码、`source.json`、本地 `.aix` 包、发布列表和各书源的网页入口。6 个书源均可在本地通过 `aidoku package` 构建；构建后的包均通过 `aidoku verify`，包括 WASM 最低版本与必要导出、128×128 不透明图标、元数据 schema 检查。本地发布列表包含全部 6 个书源。
+此前检查了源代码、`source.json`、本地 `.aix` 包、发布列表和各书源的网页入口。原有 6 个书源均可在本地通过 `aidoku package` 构建并通过 `aidoku verify`。本次新增 18mh，并重新打包验证了污污漫画和 K漫画；发布列表会在推送到 `main` 后由 GitHub Actions 重新生成。
 
 | 书源 | 网页入口检查 | 结论 |
 | --- | --- | --- |
 | 55Comics | 列表入口返回 Cloudflare HTTP 403 | 受站点验证限制，需在 Aidoku 实机验证 Cloudflare 处理 |
-| 污污漫画 | 本次未复测 | 先前检查返回 HTTP 403；需在 Aidoku 实机验证 |
-| K漫画 | `/home` 返回 Cloudflare HTTP 403 | 受站点验证限制，需在 Aidoku 实机验证；代码中的列表 URL 不随页码变化 |
+| 污污漫画 | `comicbox.xyz` 与 `55comic.com` 均返回 Cloudflare HTTP 403 | 两个域名展示同一站点；主地址改为 `55comic.com`，但换域名不能保证通过验证 |
+| 禁漫天堂（18mh） | 列表、详情、章节与首张图片均返回 HTTP 200 | 抽查列表每页 20 部、详情 65 章、章节 298 张图片；待 Aidoku 实机验证 |
+| K漫画 | 本地网络请求 `/home` 返回 Cloudflare HTTP 403 | 用户反馈手机浏览器可正常打开；已移除列表封面缺失时逐本请求详情页的慢路径，待 Aidoku 实机验证 |
 | 开心看漫画 | 列表、详情、章节页返回 HTTP 200 | 抽查章节能找到图片元素；待实机验证 |
 | 鸟鸟韩漫 | 列表、详情、章节页返回 HTTP 200 | 抽查章节能找到图片元素；待实机验证 |
 | 肉漫屋 | 列表、详情、章节页返回 HTTP 200 | 已适配章节页的 `imagePaths` 数据；抽查取得 234 张图片，首张图片返回 HTTP 200；待实机验证 |
 
-`aidoku verify` 只检查包结构和元数据，不会运行站内搜索、详情、章节或图片加载。HTTP 200 也不能证明书源能在 Aidoku 中完整阅读。本次未进行 Aidoku 实机端到端测试。55Comics 与 K漫画的 Cloudflare 验证可能因设备、网络和 Aidoku 版本而异；建议先使用包含 Cloudflare 修复的新版 Aidoku。开心看漫画的元数据未设置 `minAppVersion`，但通过了当前 CLI 的 schema 验证；其最低兼容版本应通过实机确认。
+`aidoku verify` 只检查包结构和元数据，不会运行站内搜索、详情、章节或图片加载。HTTP 200 也不能证明书源能在 Aidoku 中完整阅读。本次未进行 Aidoku 实机端到端测试。`55comics.com`（55Comics）与 `55comic.com`（污污漫画备用网址）是两个不同域名。开心看漫画的元数据未设置 `minAppVersion`，但通过了当前 CLI 的 schema 验证；其最低兼容版本应通过实机确认。
 
 ## 开发与验证
 

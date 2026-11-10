@@ -22,10 +22,11 @@ use cbc::{
 };
 use md5::{Digest, Md5};
 
-const BASE_URL: &str = "https://www.comicbox.xyz";
+const BASE_URL: &str = "https://www.55comic.com";
+const OLD_BASE_URL: &str = "https://www.comicbox.xyz";
 const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
 const CACHE_KEY: &str = "2026021808";
-const PAGE_TRIGGER_URL: &str = "https://www.comicbox.xyz/static/images/logo.png";
+const PAGE_TRIGGER_URL: &str = "https://www.55comic.com/static/images/logo.png";
 
 struct ComicBox;
 
@@ -181,7 +182,7 @@ impl Home for ComicBox {
 
 impl DeepLinkHandler for ComicBox {
 	fn handle_deep_link(&self, url: String) -> Result<Option<DeepLinkResult>> {
-		if !url.starts_with(BASE_URL) {
+		if !url.starts_with(BASE_URL) && !url.starts_with(OLD_BASE_URL) {
 			return Ok(None);
 		}
 		let key = normalize_key(&url);
@@ -282,7 +283,10 @@ fn manga_list_component(title: &str, id: &str, ranking: bool) -> Result<HomeComp
 }
 
 fn normalize_key(url: &str) -> String {
-	url.strip_prefix(BASE_URL).unwrap_or(url).to_string()
+	url.strip_prefix(BASE_URL)
+		.or_else(|| url.strip_prefix(OLD_BASE_URL))
+		.unwrap_or(url)
+		.to_string()
 }
 
 fn absolute_url(url: &str) -> String {
