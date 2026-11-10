@@ -78,6 +78,30 @@ impl Source for Rouman5 {
 		let mut pages = Vec::new();
 		let mut keys = Vec::<String>::new();
 		let mut pos = 0;
+		let image_list = body
+			.find("imagePaths:")
+			.and_then(|start| body[start..].find("=[").map(|offset| start + offset + 2))
+			.and_then(|start| {
+				body[start..]
+					.find(']')
+					.map(|offset| &body[start..start + offset])
+			});
+
+		if let Some(image_list) = image_list {
+			while let Some(url) = next_between(image_list, &mut pos, "\"", "\"") {
+				let url = unescape_json(&url);
+				if !is_image_url(&url) || keys.contains(&url) {
+					continue;
+				}
+				keys.push(url.clone());
+				pages.push(Page {
+					content: PageContent::Url(url, None),
+					..Default::default()
+				});
+			}
+		}
+
+		pos = 0;
 
 		while let Some(url) = next_between(&body, &mut pos, "imageUrl\\\":\\\"", "\\\"") {
 			let url = unescape_json(&url);
