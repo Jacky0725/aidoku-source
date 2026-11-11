@@ -8,7 +8,7 @@
 | --- | --- | --- | ---: |
 | 55Comics | `zh.55comics` | https://www.55comics.com | 3 |
 | 污污漫画 | `zh.comicbox` | https://www.55comic.com | 8 |
-| 禁漫天堂（18mh） | `zh.18mh` | https://18mh.net | 2 |
+| 禁漫天堂（18mh） | `zh.18mh` | https://18mh.net | 3 |
 | K漫画 | `zh.kmh001` | https://kmh001.com | 4 |
 | 开心看漫画 | `zh.kxmanhua` | https://kxmanhua.com | 3 |
 | 鸟鸟韩漫 | `zh.nnhanman` | https://nnhanman.xyz | 12 |
@@ -66,6 +66,10 @@ https://raw.githubusercontent.com/Jacky0725/aidoku-source/gh-pages/index.min.jso
 | 肉漫屋 | 列表、详情、章节页返回 HTTP 200 | 已适配章节页的 `imagePaths` 数据；抽查取得 234 张图片，首张图片返回 HTTP 200；待实机验证 |
 
 `aidoku verify` 只检查包结构和元数据，不会运行站内搜索、详情、章节或图片加载。HTTP 200 也不能证明书源能在 Aidoku 中完整阅读。本次未进行 Aidoku 实机端到端测试。`55comics.com`（55Comics）与 `55comic.com`（污污漫画备用网址）是两个不同域名。开心看漫画的元数据未设置 `minAppVersion`，但通过了当前 CLI 的 schema 验证；其最低兼容版本应通过实机确认。
+
+### 18mh 首页榜单（2026-11-11）
+
+版本 3 按网站的漫画排行榜接口，将日榜的人气榜、收藏榜、新作榜、完结榜显示为首页四个分区，并提供同名列表入口；“全部漫画”入口仍保留。榜单接口对四类请求均返回 HTTP 200，抽查分别取得 30、29、5、30 个作品链接。新版已通过本地打包和 `aidoku verify`，待 Aidoku 实机确认首页展示。
 
 ## Aidoku Community 漫画源导入检查（2026-11-11）
 

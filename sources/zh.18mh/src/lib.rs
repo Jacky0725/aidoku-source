@@ -3,11 +3,16 @@
 use aes::Aes128;
 use aidoku::{
 	Chapter, ContentRating, CoverImageProcessor, DeepLinkHandler, DeepLinkResult, FilterValue,
-	ImageRequestProvider, ImageResponse, Listing, ListingProvider, Manga, MangaPageResult,
-	MangaStatus, Page, PageContent, PageContext, PageImageProcessor, Result, Source,
-	UpdateStrategy, Viewer,
-	alloc::{String, Vec, format, string::ToString},
-	imports::{canvas::ImageRef, error::AidokuError, html::Element, net::Request},
+	Home, HomeComponent, HomeComponentValue, HomeLayout, ImageRequestProvider, ImageResponse,
+	Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page, PageContent, PageContext,
+	PageImageProcessor, Result, Source, UpdateStrategy, Viewer,
+	alloc::{String, Vec, format, string::ToString, vec},
+	imports::{
+		canvas::ImageRef,
+		error::AidokuError,
+		html::{Element, Html},
+		net::Request,
+	},
 	prelude::*,
 };
 use cbc::{
@@ -122,8 +127,30 @@ impl Source for Mh18 {
 }
 
 impl ListingProvider for Mh18 {
-	fn get_manga_list(&self, _listing: Listing, page: i32) -> Result<MangaPageResult> {
-		parse_manga_page(&listing_url(page))
+	fn get_manga_list(&self, listing: Listing, page: i32) -> Result<MangaPageResult> {
+		match listing.id.as_str() {
+			"popular" | "favorite" | "new" | "finished" if page <= 1 => {
+				parse_rank_page(&listing.id)
+			}
+			"popular" | "favorite" | "new" | "finished" => Ok(MangaPageResult {
+				entries: Vec::new(),
+				has_next_page: false,
+			}),
+			_ => parse_manga_page(&listing_url(page)),
+		}
+	}
+}
+
+impl Home for Mh18 {
+	fn get_home(&self) -> Result<HomeLayout> {
+		Ok(HomeLayout {
+			components: vec![
+				rank_component("人气榜", "popular")?,
+				rank_component("收藏榜", "favorite")?,
+				rank_component("新作榜", "new")?,
+				rank_component("完结榜", "finished")?,
+			],
+		})
 	}
 }
 
@@ -243,6 +270,73 @@ fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
 	})
 }
 
+fn parse_rank_page(sort: &str) -> Result<MangaPageResult> {
+	let url = format!("{BASE_URL}/rank/board?theme=comic&sort={sort}&period=day");
+	let body = Request::get(url)?
+		.header("Accept", "application/json")
+		.header("Referer", "https://18mh.net/comic/rank")
+		.string()?;
+	let json: serde_json::Value = serde_json::from_str(&body)
+		.map_err(|_| AidokuError::message("invalid 18mh ranking response"))?;
+	let markup = json
+		.pointer("/data/html")
+		.and_then(|value| value.as_str())
+		.ok_or_else(|| AidokuError::message("missing 18mh ranking HTML"))?;
+	let html = Html::parse_fragment(markup)
+		.map_err(|_| AidokuError::message("invalid 18mh ranking HTML"))?;
+	let mut ranked = html
+		.select(".jm-rp-panel a.jm-rp-stand[href^='/comic/detail/'], .jm-rp-panel a.jm-rkrow[href^='/comic/detail/']")
+		.map(|els| {
+			els.filter_map(|card| {
+				let href = card.attr("href")?;
+				let title = card.select_first(".jm-rp-stitle, .jm-rkrow__title")?
+					.text().map(clean_text)?;
+				if title.is_empty() { return None; }
+				let rank = card.select_first(".jm-rp-big, .jm-rkrow__no")?
+					.text()?.trim().parse::<i32>().ok()?;
+				let cover = card.select_first("img[data-src]")
+					.and_then(|img| attr_url(&img, "data-src"));
+				Some((rank, Manga {
+					key: href.clone(),
+					title,
+					cover,
+					content_rating: ContentRating::NSFW,
+					viewer: Viewer::Webtoon,
+					url: Some(absolute_url(&href)),
+					..Default::default()
+				}))
+			}).collect::<Vec<_>>()
+		}).unwrap_or_default();
+	ranked.sort_by_key(|(rank, _)| *rank);
+	Ok(MangaPageResult {
+		entries: ranked.into_iter().map(|(_, manga)| manga).collect(),
+		has_next_page: false,
+	})
+}
+
+fn rank_component(title: &str, id: &str) -> Result<HomeComponent> {
+	let listing = Listing {
+		id: id.into(),
+		name: title.into(),
+		..Default::default()
+	};
+	Ok(HomeComponent {
+		title: Some(title.into()),
+		subtitle: Some(String::from("日榜")),
+		value: HomeComponentValue::MangaList {
+			ranking: true,
+			page_size: Some(12),
+			entries: parse_rank_page(id)?
+				.entries
+				.into_iter()
+				.take(12)
+				.map(|manga| manga.into())
+				.collect(),
+			listing: Some(listing),
+		},
+	})
+}
+
 fn listing_url(page: i32) -> String {
 	format!("{BASE_URL}/comic/all?page={}", page.max(1))
 }
@@ -289,6 +383,7 @@ fn hex(value: u8) -> char {
 register_source!(
 	Mh18,
 	ListingProvider,
+	Home,
 	DeepLinkHandler,
 	ImageRequestProvider,
 	CoverImageProcessor,

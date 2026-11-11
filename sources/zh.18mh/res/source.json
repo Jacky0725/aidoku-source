@@ -2,13 +2,17 @@
 	"info": {
 		"id": "zh.18mh",
 		"name": "禁漫天堂（18mh）",
-		"version": 2,
+		"version": 3,
 		"url": "https://18mh.net",
 		"minAppVersion": "0.8.3",
 		"contentRating": 2,
 		"languages": ["zh"]
 	},
 	"listings": [
+		{ "id": "popular", "name": "人气榜（日榜）" },
+		{ "id": "favorite", "name": "收藏榜（日榜）" },
+		{ "id": "new", "name": "新作榜（日榜）" },
+		{ "id": "finished", "name": "完结榜（日榜）" },
 		{ "id": "all", "name": "全部漫画" }
 	]
 }

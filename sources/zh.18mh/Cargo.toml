@@ -7,6 +7,7 @@ edition = "2024"
 aidoku = { git = "https://github.com/Aidoku/aidoku-rs.git", version = "0.3.0" }
 aes = { version = "0.8", default-features = false }
 cbc = { version = "0.1", default-features = false, features = ["alloc", "block-padding"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 [lib]
 crate-type = ["cdylib"]
