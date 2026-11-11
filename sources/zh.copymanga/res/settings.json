@@ -1,0 +1,61 @@
+[
+	{
+		"type": "group",
+		"title": "帳號",
+		"footer": "登入後可查看、加入或取消網站帳戶收藏。",
+		"items": [
+			{
+				"type": "login",
+				"key": "login",
+				"title": "登入",
+				"logoutTitle": "登出",
+				"method": "basic",
+				"notification": "login",
+				"refreshes": ["listings", "content"]
+			}
+		]
+	},
+	{
+		"type": "group",
+		"title": "簡介按鈕",
+		"footer": "已加入 Aidoku 書架的漫畫，重新整理詳情後才會顯示按鈕。收藏功能可能回應較慢，請勿連續點擊。",
+		"items": [
+			{
+				"type": "switch",
+				"key": "commentButtons.inDetail",
+				"title": "顯示詳情頁評論區按鈕",
+				"default": false,
+				"refreshes": ["content"]
+			},
+			{
+				"type": "switch",
+				"key": "favButtons.inDetail",
+				"title": "顯示詳情頁收藏漫畫按鈕",
+				"default": false,
+				"refreshes": ["content"]
+			}
+		]
+	},
+	{
+		"type": "group",
+		"title": "圖片",
+		"items": [
+			{
+				"type": "select",
+				"key": "image.quality",
+				"title": "畫質",
+				"titles": ["低", "中", "高"],
+				"values": ["c800x", "c1200x", "c1500x"],
+				"default": "c1500x"
+			},
+			{
+				"type": "select",
+				"key": "image.format",
+				"title": "格式",
+				"titles": ["高效率", "最兼容"],
+				"values": ["webp", "jpg"],
+				"default": "webp"
+			}
+		]
+	}
+]

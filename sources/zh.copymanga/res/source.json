@@ -1,0 +1,29 @@
+{
+	"info": {
+		"id": "zh.copymanga",
+		"name": "拷貝漫畫",
+		"altNames": ["拷贝漫画"],
+		"version": 1,
+		"urls": [
+			"https://www.copy5000.com",
+			"https://www.copy4000.com",
+			"https://www.copy3000.com",
+			"https://copy3000.com",
+			"https://www.2026copy.com",
+			"https://2026copy.com",
+			"https://www.2025copy.com",
+			"https://2025copy.com",
+			"https://www.copy20.com",
+			"https://copy20.com"
+		],
+		"contentRating": 1,
+		"languages": ["zh"],
+		"minAppVersion": "0.7.1"
+	},
+	"config": {
+		"allowsBaseUrlSelect": true,
+		"hidesFiltersWhileSearching": true,
+		"supportsAuthorSearch": true,
+		"supportsTagSearch": true
+	}
+}

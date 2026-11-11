@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "sources/**"
+      - "templates/**"
       - ".github/workflows/build.yaml"
       - "README.md"
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin
             sources/**/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('sources/**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('sources/**/Cargo.toml', 'templates/**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Install Aidoku CLI

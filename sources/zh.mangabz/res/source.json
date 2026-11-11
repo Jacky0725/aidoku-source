@@ -1,0 +1,16 @@
+{
+	"info": {
+		"id": "zh.mangabz",
+		"name": "Māngabz",
+		"version": 1,
+		"url": "https://mangabz.com",
+		"contentRating": 1,
+		"languages": ["zh"],
+		"minAppVersion": "0.7.1"
+	},
+	"config": {
+		"hidesFiltersWhileSearching": true,
+		"supportsAuthorSearch": true,
+		"supportsTagSearch": true
+	}
+}

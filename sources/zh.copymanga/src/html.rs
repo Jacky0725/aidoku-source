@@ -1,0 +1,373 @@
+use crate::{
+	json::{EncryptedJson as _, MangaItem, page_list},
+	net::Url,
+};
+use aidoku::{
+	HomeComponent, HomeComponentValue, HomeLayout, Link, LinkValue, Listing, ListingKind, Manga,
+	MangaPageResult, MangaStatus, Page, Result, SelectFilter, Viewer,
+	alloc::{String, Vec, borrow::ToOwned as _, format},
+	error,
+	imports::{
+		html::{Document, Element, ElementList},
+		js::JsContext,
+	},
+};
+
+pub trait HomePage {
+	fn home_layout(&self, base_url: &str) -> Result<HomeLayout>;
+}
+
+impl HomePage for Document {
+	fn home_layout(&self, base_url: &str) -> Result<HomeLayout> {
+		let mut components = Vec::new();
+		let banners: Vec<Link> = self
+			.try_select(".carousel-inner .carousel-item")?
+			.filter_map(|item| {
+				let link = item.select_first("a[href]")?;
+				let href = link.attr("href")?;
+				let image = item.select_first("img")?;
+				let image_url = image.attr("data-src").or_else(|| image.attr("src"))?;
+				let title = item
+					.select_first(".carousel-caption")
+					.and_then(|caption| caption.text())
+					.unwrap_or_default();
+				let value = if let Some(key) = href.strip_prefix("/comic/") {
+					LinkValue::Manga(Manga {
+						key: key.into(),
+						title: title.clone(),
+						..Default::default()
+					})
+				} else {
+					LinkValue::Url(absolute_url(base_url, &href))
+				};
+				Some(Link {
+					title,
+					subtitle: None,
+					image_url: Some(absolute_url(base_url, &image_url)),
+					value: Some(value),
+				})
+			})
+			.collect();
+		if !banners.is_empty() {
+			components.push(HomeComponent {
+				title: None,
+				value: HomeComponentValue::ImageScroller {
+					links: banners,
+					auto_scroll_interval: Some(5.0),
+					width: Some(300),
+					height: Some(145),
+				},
+				..Default::default()
+			});
+		}
+
+		for (heading, listing) in [
+			("漫畫推薦", None),
+			("熱門更新", Some(("update", "更新時間"))),
+			("全新上架", Some(("recent", "全新上架"))),
+		] {
+			let Some(section) = self.try_select("div.container")?.find(|section| {
+				section
+					.select_first(".index-all-icon-left-txt")
+					.and_then(|title| title.text())
+					.is_some_and(|title| {
+						title
+							.chars()
+							.filter(|c| !c.is_whitespace())
+							.eq(heading.chars())
+					})
+			}) else {
+				continue;
+			};
+			let entries: Vec<Link> = section
+				.select(".row .col-auto > a[href^='/comic/']")
+				.into_iter()
+				.flatten()
+				.filter_map(|link| {
+					let key = link.attr("href")?.strip_prefix("/comic/")?.into();
+					let title = link.select_first("p.edit-txt")?.text()?;
+					let image = link.select_first("img")?;
+					let cover = image
+						.attr("data-src")
+						.or_else(|| image.attr("src"))?
+						.replace(".328x422.jpg", "");
+					Some(
+						Manga {
+							key,
+							title,
+							cover: Some(absolute_url(base_url, &cover)),
+							..Default::default()
+						}
+						.into(),
+					)
+				})
+				.collect();
+			if !entries.is_empty() {
+				components.push(HomeComponent {
+					title: Some(heading.into()),
+					value: HomeComponentValue::Scroller {
+						entries,
+						listing: listing.map(|(id, name)| Listing {
+							id: id.into(),
+							name: name.into(),
+							kind: ListingKind::Default,
+						}),
+					},
+					..Default::default()
+				});
+			}
+		}
+		Ok(HomeLayout { components })
+	}
+}
+
+fn absolute_url(base_url: &str, url: &str) -> String {
+	if url.starts_with("https://") || url.starts_with("http://") {
+		url.into()
+	} else if url.starts_with("//") {
+		format!("https:{url}")
+	} else {
+		format!("{}{url}", base_url.trim_end_matches('/'))
+	}
+}
+
+pub trait GenresPage {
+	fn filter(&self) -> Result<SelectFilter>;
+}
+
+impl GenresPage for Document {
+	fn filter(&self) -> Result<SelectFilter> {
+		let (mut options, mut ids) = self
+			.try_select("div#all a:not([disabled])")?
+			.filter_map(|element| {
+				let option = element.own_text()?.into();
+				let id = element.attr("href")?.rsplit_once('=')?.1.to_owned().into();
+				Some((option, id))
+			})
+			.collect::<(Vec<_>, Vec<_>)>();
+
+		options.insert(0, "全部".into());
+		ids.insert(0, "".into());
+
+		Ok(SelectFilter {
+			id: "題材".into(),
+			title: Some("題材".into()),
+			is_genre: true,
+			uses_tag_style: true,
+			options,
+			ids: Some(ids),
+			..Default::default()
+		})
+	}
+}
+
+pub trait FiltersPage {
+	fn manga_page_result(&self) -> Result<MangaPageResult>;
+}
+
+impl FiltersPage for Document {
+	fn manga_page_result(&self) -> Result<MangaPageResult> {
+		let single_quoted_json = self
+			.try_select_first("div.exemptComic-box")?
+			.attr("list")
+			.ok_or_else(|| error!("Attribute not found: `list`"))?;
+		let json = JsContext::new().eval(&format!("JSON.stringify({single_quoted_json})"))?;
+		let entries = serde_json::from_str::<Vec<MangaItem>>(&json)?
+			.into_iter()
+			.map(Into::into)
+			.collect();
+
+		let has_next_page = !self
+			.try_select("li.page-all-item")?
+			.next_back()
+			.ok_or_else(|| error!("No element found for selector: `li.page-all-item`"))?
+			.has_class("active");
+
+		Ok(MangaPageResult {
+			entries,
+			has_next_page,
+		})
+	}
+}
+
+/// 网站发现页「全新上架」的作品卡片。
+pub trait NewestPage {
+	fn newest_manga_page_result(&self) -> Result<MangaPageResult>;
+}
+
+impl NewestPage for Document {
+	fn newest_manga_page_result(&self) -> Result<MangaPageResult> {
+		let entries = self
+			.try_select("div.exemptComic_Item")?
+			.filter_map(|card| {
+				let link = card.select_first("a[href^='/comic/']")?;
+				let key = link.attr("href")?.strip_prefix("/comic/")?.into();
+				let title = card.select_first("p")?.text()?;
+				let cover = card
+					.select_first("img[data-src]")?
+					.attr("data-src")?
+					.replace(".328x422.jpg", "");
+				Some(Manga {
+					key,
+					title,
+					cover: Some(cover),
+					..Default::default()
+				})
+			})
+			.collect();
+
+		let has_next_page = self
+			.try_select("li.page-all-item")?
+			.next_back()
+			.map(|item| !item.has_class("active"))
+			.unwrap_or(false);
+
+		Ok(MangaPageResult {
+			entries,
+			has_next_page,
+		})
+	}
+}
+
+pub trait MangaPage {
+	fn update_details(&self, manga: &mut Manga) -> Result<()>;
+}
+
+impl MangaPage for Document {
+	fn update_details(&self, manga: &mut Manga) -> Result<()> {
+		manga.title = self
+			.try_select_first("h6")?
+			.text()
+			.ok_or_else(|| error!("Text not found"))?;
+
+		manga.cover = self
+			.try_select_first("img[data-src]")?
+			.attr("data-src")
+			.map(|resized| resized.replace(".328x422.jpg", ""));
+
+		let authors = self
+			.try_select("span.comicParticulars-right-txt > a")?
+			.filter_map(|element| element.text())
+			.collect();
+		manga.authors = Some(authors);
+
+		manga.description = self.try_select_first("p.intro")?.text();
+
+		manga.url = Url::manga(&manga.key).to_string().ok();
+
+		let tags: Vec<String> = self
+			.try_select("span.comicParticulars-tag > a")?
+			.filter_map(|element| {
+				let tag = element.text()?.strip_prefix('#')?.into();
+				Some(tag)
+			})
+			.collect();
+		if tags.iter().any(|tag| tag == "長條") {
+			manga.viewer = Viewer::Webtoon;
+		}
+		manga.tags = Some(tags);
+
+		manga.status = match self
+			.try_select_first("li:contains(狀態：) > span.comicParticulars-right-txt")?
+			.text()
+			.as_deref()
+		{
+			Some("連載中") => MangaStatus::Ongoing,
+			Some("已完結" | "短篇") => MangaStatus::Completed,
+			_ => MangaStatus::Unknown,
+		};
+
+		Ok(())
+	}
+}
+
+/// 詳情頁收藏按鈕上的漫畫 UUID（`onclick="collect('…')"`），
+/// 供評論鏈接使用（網站評論區以 UUID 為鍵）。
+pub trait CollectButtonPage {
+	fn collect_uuid(&self) -> Option<String>;
+}
+
+impl CollectButtonPage for Document {
+	fn collect_uuid(&self) -> Option<String> {
+		let onclick = self
+			.try_select("[onclick*='collect']")
+			.ok()?
+			.find_map(|element| {
+				let attr = element.attr("onclick")?;
+				attr.contains("collect(").then_some(attr)
+			})?;
+		let uuid = onclick.split("collect('").nth(1)?.split('\'').next()?;
+		(!uuid.is_empty()).then_some(uuid.into())
+	}
+}
+
+pub trait KeyPage {
+	fn key(&self) -> Result<String>;
+}
+
+impl KeyPage for Document {
+	fn key(&self) -> Result<String> {
+		let key = self
+			.try_select("script:not([*])")?
+			.find_map(|element| {
+				let data = element.data()?;
+				data.contains("var").then_some(data)
+			})
+			.ok_or_else(|| error!("No script content contains `var`"))?
+			.split('\'')
+			.nth(1)
+			.ok_or_else(|| error!("Key not found"))?
+			.into();
+		Ok(key)
+	}
+}
+
+pub trait ChapterPage {
+	fn pages(&self) -> Result<Vec<Page>>;
+	fn dnt(&self) -> Option<String>;
+}
+
+impl ChapterPage for Document {
+	fn pages(&self) -> Result<Vec<Page>> {
+		let key = self.key()?;
+		let json = self
+			.try_select("script:not([*])")?
+			.find_map(|element| {
+				let data = element.data()?;
+				data.contains("var").then_some(data)
+			})
+			.ok_or_else(|| error!("No script content contains `var`"))?
+			.split_once("var contentKey = '")
+			.ok_or_else(|| error!("String not found: `var contentKey = '`"))?
+			.1
+			.split_once("';")
+			.ok_or_else(|| error!("String not found: `';`"))?
+			.0
+			.decrypt(&key)?;
+		serde_json::from_slice::<Vec<page_list::Item>>(&json)?
+			.into_iter()
+			.map(TryInto::try_into)
+			.collect()
+	}
+
+	fn dnt(&self) -> Option<String> {
+		self.select_first("#dnt")?.attr("value")
+	}
+}
+
+trait TrySelect {
+	fn try_select<S: AsRef<str>>(&self, css_query: S) -> Result<ElementList>;
+	fn try_select_first<S: AsRef<str>>(&self, css_query: S) -> Result<Element>;
+}
+
+impl TrySelect for Document {
+	fn try_select<S: AsRef<str>>(&self, css_query: S) -> Result<ElementList> {
+		self.select(&css_query)
+			.ok_or_else(|| error!("No element found for selector: `{}`", css_query.as_ref()))
+	}
+
+	fn try_select_first<S: AsRef<str>>(&self, css_query: S) -> Result<Element> {
+		self.select_first(&css_query)
+			.ok_or_else(|| error!("No element found for selector: `{}`", css_query.as_ref()))
+	}
+}

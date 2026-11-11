@@ -1,0 +1,19 @@
+{
+	"info": {
+		"id": "zh.manhuagui",
+		"name": "Manhuagui",
+		"version": 1,
+		"urls": [
+			"https://www.manhuagui.com",
+			"https://tw.manhuagui.com"
+		],
+		"contentRating": 1,
+		"languages": ["zh"],
+		"minAppVersion": "0.7.1"
+	},
+	"config": {
+		"hidesFiltersWhileSearching": true,
+		"supportsAuthorSearch": true,
+		"supportsTagSearch": true
+	}
+}

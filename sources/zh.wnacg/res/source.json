@@ -1,0 +1,56 @@
+{
+	"info": {
+		"id": "zh.wnacg",
+		"name": "紳士漫畫",
+		"version": 1,
+		"urls": [
+			"https://www.wn001.cfd",
+			"https://www.wn002.cfd",
+			"https://www.wnacg.com",
+			"https://www.wnacg.site",
+			"https://www.wnacg.buzz",
+			"https://www.wnacg.ru",
+			"https://www.wn07.ru"
+		],
+		"contentRating": 2,
+		"languages": ["zh"],
+		"minAppVersion": "0.7.1"
+	},
+	"listings": [
+		{
+			"id": "update",
+			"name": "更新"
+		},
+		{
+			"id": "dayup",
+			"name": "日排行"
+		},
+		{
+			"id": "weekup",
+			"name": "周排行"
+		},
+		{
+			"id": "monthup",
+			"name": "月排行"
+		},
+		{
+			"id": "doujinshi",
+			"name": "同人志"
+		},
+		{
+			"id": "single-volume",
+			"name": "单行本"
+		},
+		{
+			"id": "magazine",
+			"name": "杂志&短篇"
+		}
+	],
+	"config": {
+		"allowsBaseUrlSelect": true,
+		"hidesFiltersWhileSearching": true,
+		"supportsTagSearch": true,
+		"supportsAuthorSearch": true,
+		"supportsArtistSearch": true
+	}
+}

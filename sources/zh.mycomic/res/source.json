@@ -1,0 +1,16 @@
+{
+	"info": {
+		"id": "zh.mycomic",
+		"name": "MYCOMIC",
+		"version": 1,
+		"url": "https://mycomic.com",
+		"contentRating": 1,
+		"languages": ["zh"],
+		"minAppVersion": "0.7.1"
+	},
+	"config": {
+		"hidesFiltersWhileSearching": true,
+		"supportsAuthorSearch": true,
+		"supportsTagSearch": true
+	}
+}

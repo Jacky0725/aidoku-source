@@ -1,0 +1,38 @@
+[
+	{
+		"type": "group",
+		"title": "账号",
+		"items": [
+			{
+				"type": "login",
+				"key": "login",
+				"title": "登录",
+				"logoutTitle": "登出",
+				"method": "basic",
+				"notification": "login",
+				"refreshes": [
+					"settings",
+					"content"
+				]
+			},
+			{
+				"type": "switch",
+				"key": "autoCheckin",
+				"title": "自动签到",
+				"requires": "login"
+			}
+		]
+	},
+	{
+		"type": "group",
+		"title": "内容",
+		"items": [
+			{
+				"type": "switch",
+				"key": "chapterComments",
+				"title": "章末吐槽",
+				"subtitle": "在章节末尾附加一页读者吐槽"
+			}
+		]
+	}
+]
