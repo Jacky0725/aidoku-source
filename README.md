@@ -8,7 +8,7 @@
 | --- | --- | --- | ---: |
 | 55Comics | `zh.55comics` | https://www.55comics.com | 3 |
 | 污污漫画 | `zh.comicbox` | https://www.55comic.com | 8 |
-| 禁漫天堂（18mh） | `zh.18mh` | https://18mh.net | 1 |
+| 禁漫天堂（18mh） | `zh.18mh` | https://18mh.net | 2 |
 | K漫画 | `zh.kmh001` | https://kmh001.com | 4 |
 | 开心看漫画 | `zh.kxmanhua` | https://kxmanhua.com | 3 |
 | 鸟鸟韩漫 | `zh.nnhanman` | https://nnhanman.xyz | 12 |
@@ -40,7 +40,7 @@ https://jacky0725.github.io/aidoku-source/index.min.json
 | --- | --- | --- |
 | 55Comics | 列表入口返回 Cloudflare HTTP 403 | 受站点验证限制，需在 Aidoku 实机验证 Cloudflare 处理 |
 | 污污漫画 | `comicbox.xyz` 与 `55comic.com` 均返回 Cloudflare HTTP 403 | 两个域名展示同一站点；主地址改为 `55comic.com`，但换域名不能保证通过验证 |
-| 禁漫天堂（18mh） | 列表、详情、章节与首张图片均返回 HTTP 200 | 抽查列表每页 20 部、详情 65 章、章节 298 张图片；待 Aidoku 实机验证 |
+| 禁漫天堂（18mh） | 列表、详情、章节与图片请求均返回 HTTP 200 | 网站图片为 AES-CBC 加密数据，已为封面和阅读页加入解密；抽样解密后均为可识别的 JPEG，待 Aidoku 实机验证 |
 | K漫画 | 本地网络请求 `/home` 返回 Cloudflare HTTP 403 | 用户反馈手机浏览器可正常打开；已移除列表封面缺失时逐本请求详情页的慢路径，待 Aidoku 实机验证 |
 | 开心看漫画 | 列表、详情、章节页返回 HTTP 200 | 抽查章节能找到图片元素；待实机验证 |
 | 鸟鸟韩漫 | 列表、详情、章节页返回 HTTP 200 | 抽查章节能找到图片元素；待实机验证 |

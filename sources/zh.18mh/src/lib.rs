@@ -1,15 +1,24 @@
 #![no_std]
 
+use aes::Aes128;
 use aidoku::{
-	Chapter, ContentRating, DeepLinkHandler, DeepLinkResult, FilterValue, ImageRequestProvider,
-	Listing, ListingProvider, Manga, MangaPageResult, MangaStatus, Page, PageContent, PageContext,
-	Result, Source, UpdateStrategy, Viewer,
+	Chapter, ContentRating, CoverImageProcessor, DeepLinkHandler, DeepLinkResult, FilterValue,
+	ImageRequestProvider, ImageResponse, Listing, ListingProvider, Manga, MangaPageResult,
+	MangaStatus, Page, PageContent, PageContext, PageImageProcessor, Result, Source,
+	UpdateStrategy, Viewer,
 	alloc::{String, Vec, format, string::ToString},
-	imports::{html::Element, net::Request},
+	imports::{canvas::ImageRef, error::AidokuError, html::Element, net::Request},
 	prelude::*,
+};
+use cbc::{
+	Decryptor,
+	cipher::{BlockDecryptMut, KeyIvInit, block_padding::NoPadding},
 };
 
 const BASE_URL: &str = "https://18mh.net";
+const PAGE_TRIGGER_URL: &str = "https://18mh.net/static/frontend/assets/favicon.png";
+const IMAGE_KEY: &[u8; 16] = b"f5d965df75336270";
+const IMAGE_IV: &[u8; 16] = b"97b60394abc2fbe1";
 
 struct Mh18;
 
@@ -99,8 +108,10 @@ impl Source for Mh18 {
 			.map(|els| {
 				els.filter_map(|img| {
 					let url = attr_url(&img, "data-src")?;
+					let mut context = PageContext::new();
+					context.insert(String::from("url"), url.clone());
 					Some(Page {
-						content: PageContent::Url(url, None),
+						content: PageContent::url_context(&unique_trigger_url(&url), context),
 						..Default::default()
 					})
 				})
@@ -134,6 +145,67 @@ impl ImageRequestProvider for Mh18 {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
 		Ok(Request::get(url)?.header("Referer", BASE_URL))
 	}
+}
+
+impl CoverImageProcessor for Mh18 {
+	fn process_cover_image(&self, response: ImageResponse) -> Result<ImageRef> {
+		let data = response.image.data();
+		if !data.is_empty() {
+			return decode_image(data);
+		}
+		let url = response
+			.request
+			.url
+			.ok_or_else(|| AidokuError::message("missing 18mh cover URL"))?;
+		decode_image(Request::get(url)?.header("Referer", BASE_URL).data()?)
+	}
+}
+
+impl PageImageProcessor for Mh18 {
+	fn process_page_image(
+		&self,
+		response: ImageResponse,
+		context: Option<PageContext>,
+	) -> Result<ImageRef> {
+		let Some(url) = context.and_then(|ctx| ctx.get("url").cloned()) else {
+			return Ok(response.image);
+		};
+		decode_image(Request::get(url)?.header("Referer", BASE_URL).data()?)
+	}
+}
+
+fn decode_image(data: Vec<u8>) -> Result<ImageRef> {
+	if is_plain_image(&data) {
+		return Ok(ImageRef::new(&data));
+	}
+	if data.is_empty() || data.len() % 16 != 0 {
+		return Err(AidokuError::message("invalid 18mh image data"));
+	}
+	let decrypted = Decryptor::<Aes128>::new(IMAGE_KEY.into(), IMAGE_IV.into())
+		.decrypt_padded_vec_mut::<NoPadding>(&data)
+		.map_err(|_| AidokuError::message("failed to decrypt 18mh image"))?;
+	if !is_plain_image(&decrypted) {
+		return Err(AidokuError::message("invalid decrypted 18mh image"));
+	}
+	Ok(ImageRef::new(&decrypted))
+}
+
+fn is_plain_image(data: &[u8]) -> bool {
+	data.starts_with(&[0xff, 0xd8, 0xff])
+		|| data.starts_with(&[0x89, 0x50, 0x4e, 0x47])
+		|| data.starts_with(b"GIF87a")
+		|| data.starts_with(b"GIF89a")
+		|| data.get(4..12) == Some(b"ftypavif")
+		|| data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP")
+}
+
+fn unique_trigger_url(url: &str) -> String {
+	let mut hash = 2_166_136_261u32;
+	for byte in url.as_bytes() {
+		hash ^= *byte as u32;
+		hash = hash.wrapping_mul(16_777_619);
+	}
+	format!("{PAGE_TRIGGER_URL}?aidoku={hash}")
 }
 
 fn parse_manga_page(url: &str) -> Result<MangaPageResult> {
@@ -214,4 +286,11 @@ fn hex(value: u8) -> char {
 	}
 }
 
-register_source!(Mh18, ListingProvider, DeepLinkHandler, ImageRequestProvider);
+register_source!(
+	Mh18,
+	ListingProvider,
+	DeepLinkHandler,
+	ImageRequestProvider,
+	CoverImageProcessor,
+	PageImageProcessor
+);
