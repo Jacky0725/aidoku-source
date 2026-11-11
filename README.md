@@ -21,13 +21,13 @@
 在 Aidoku 中添加以下书源列表 URL，然后从列表安装书源：
 
 ```text
-https://raw.githubusercontent.com/Jacky0725/aidoku-source/gh-pages/index.min.json
+https://jacky0725.github.io/aidoku-source/index.min.json
 ```
 
-如果仓库已启用 GitHub Pages，也可尝试以下地址（本次未验证其可访问性）：
+也可使用以下 GitHub 原始文件地址，但其 CDN 缓存有时会延迟显示新版书源：
 
 ```text
-https://jacky0725.github.io/aidoku-source/index.min.json
+https://raw.githubusercontent.com/Jacky0725/aidoku-source/gh-pages/index.min.json
 ```
 
 书源列表由 `.github/workflows/build.yaml` 在 `main` 分支更新后构建并发布至 `gh-pages`。外部书源由本站点维护者提供，并非 Aidoku 官方书源。
